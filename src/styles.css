@@ -99,7 +99,7 @@ button:disabled {
   color: #0f172a;
 }
 
-input:focus {
+.auth-panel input:focus {
   border-color: #0f766e;
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
   outline: none;
