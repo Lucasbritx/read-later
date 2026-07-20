@@ -67,7 +67,11 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
             required
           />
 
-          {error ? <p className="error-message">{error}</p> : null}
+          {error ? (
+            <p className="error-message" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <button className="primary-button" type="submit" disabled={isSubmitting}>
             {isSignIn ? 'Sign in' : 'Sign up'}
