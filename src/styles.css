@@ -145,3 +145,43 @@ button:disabled {
   font-size: 0.92rem;
   font-weight: 700;
 }
+
+.article-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.article-form label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.article-form input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.article-form input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+  outline: none;
+}
+
+.article-form .error-message {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 680px) {
+  .article-form {
+    grid-template-columns: 1fr;
+  }
+}
