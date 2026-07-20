@@ -22,6 +22,12 @@ npm install
 npm run dev
 ```
 
+## Chrome Extension
+
+The `chrome-extension` folder contains a Manifest V3 extension that signs in with the same Supabase email/password account and saves the active tab as an unread article.
+
+Copy `chrome-extension/config.example.js` to `chrome-extension/config.js`, fill in your Supabase URL and anon key, then load the `chrome-extension` folder from `chrome://extensions`.
+
 ## Verification
 
 ```sh
@@ -36,9 +42,9 @@ npm run build
 - List unread, read, and all articles
 - Mark articles read or unread
 - Delete articles
+- Chrome extension for saving the active tab
 
 ## Future Phases
 
-- Chrome extension for active tab
 - Supabase Edge Function for article extraction
 - Send-to-Kindle through Kindle email
