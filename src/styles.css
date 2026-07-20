@@ -42,3 +42,106 @@ button:disabled {
   margin: 0 auto;
   padding: 32px 0;
 }
+
+.auth-layout {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.12), transparent 36%),
+    linear-gradient(315deg, rgba(16, 185, 129, 0.12), transparent 34%),
+    #f8fafc;
+}
+
+.auth-panel {
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.auth-panel h1 {
+  margin: 0 0 24px;
+  color: #0f172a;
+  font-size: clamp(2rem, 5vw, 2.45rem);
+  line-height: 1.08;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+input {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+  outline: none;
+}
+
+.primary-button,
+.text-button,
+.icon-button {
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+.primary-button {
+  margin-top: 8px;
+  border: 1px solid #0f766e;
+  background: #0f766e;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #115e59;
+}
+
+.text-button {
+  width: 100%;
+  margin-top: 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #0f766e;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.text-button:hover {
+  background: #ecfdf5;
+}
+
+.error-message {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
