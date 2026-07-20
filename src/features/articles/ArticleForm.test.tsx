@@ -1,18 +1,17 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+// @vitest-environment happy-dom
+
 import { describe, expect, it, vi } from 'vitest';
 
+import { click, getButton, getByText, getInputByLabel, render, typeInto } from '../../test/render';
 import { ArticleForm } from './ArticleForm';
 
 describe('ArticleForm', () => {
-  it('submits an article draft with normalized URL metadata', async () => {
-    const user = userEvent.setup();
+  it('submits a normalized article draft', async () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(<ArticleForm onCreate={onCreate} />);
 
-    render(<ArticleForm onCreate={onCreate} />);
-
-    await user.type(screen.getByLabelText('Article URL'), 'example.com/story');
-    await user.click(screen.getByRole('button', { name: 'Save article' }));
+    await typeInto(getInputByLabel(container, 'Article URL'), 'example.com/story');
+    await click(getButton(container, 'Save article'));
 
     expect(onCreate).toHaveBeenCalledWith({
       url: 'https://example.com/story',
@@ -22,16 +21,14 @@ describe('ArticleForm', () => {
     });
   });
 
-  it('shows an error for invalid URLs without submitting', async () => {
-    const user = userEvent.setup();
+  it('shows validation feedback for invalid urls', async () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(<ArticleForm onCreate={onCreate} />);
 
-    render(<ArticleForm onCreate={onCreate} />);
+    await typeInto(getInputByLabel(container, 'Article URL'), 'bad url');
+    await click(getButton(container, 'Save article'));
 
-    await user.type(screen.getByLabelText('Article URL'), 'bad url');
-    await user.click(screen.getByRole('button', { name: 'Save article' }));
-
-    expect(screen.getByText('Enter a valid article URL.')).toBeInTheDocument();
+    expect(getByText(container, 'Enter a valid article URL.')).toBeTruthy();
     expect(onCreate).not.toHaveBeenCalled();
   });
 });

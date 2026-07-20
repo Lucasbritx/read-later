@@ -1,4 +1,7 @@
-import { Check, LogOut, Trash2, Undo2 } from 'lucide-react';
+import Check from 'lucide-react/dist/esm/icons/check.js';
+import LogOut from 'lucide-react/dist/esm/icons/log-out.js';
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
+import Undo2 from 'lucide-react/dist/esm/icons/undo-2.js';
 
 import type { ArticleDraft } from '../../lib/urlMetadata';
 import { ArticleForm } from './ArticleForm';

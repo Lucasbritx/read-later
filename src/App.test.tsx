@@ -1,13 +1,15 @@
-import type { Session } from '@supabase/supabase-js';
-import { act, render, screen, waitFor } from '@testing-library/react';
+// @vitest-environment happy-dom
+
+import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Article } from './features/articles/articleTypes';
 import App from './App';
+import type { Article } from './features/articles/articleTypes';
+import { getByText, queryByText, render, waitFor } from './test/render';
 
-const testState = vi.hoisted(() => {
+const testState = vi.hoisted((): any => {
   const authState = {
-    callback: undefined as undefined | ((_event: string, session: Session | null) => void)
+    callback: undefined as undefined | ((_event: string, session: unknown) => void)
   };
 
   return {
@@ -53,7 +55,7 @@ vi.mock('./features/articles/articleRepository', () => ({
   updateArticleStatus: testState.updateArticleStatus
 }));
 
-function createSession(userId: string, email: string): Session {
+function createSession(userId: string, email: string) {
   return {
     access_token: `${userId}-token`,
     expires_at: 1_785_000_000,
@@ -68,7 +70,7 @@ function createSession(userId: string, email: string): Session {
       id: userId,
       user_metadata: {}
     }
-  } as Session;
+  };
 }
 
 function createArticle(id: string, userId: string, title: string): Article {
@@ -106,9 +108,11 @@ describe('App', () => {
   });
 
   it('shows the auth form when signed out', async () => {
-    render(<App />);
+    const { container } = render(<App />);
 
-    expect(await screen.findByText('Welcome back')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getByText(container, 'Welcome back')).toBeTruthy();
+    });
   });
 
   it('ignores stale article loads from a previous session', async () => {
@@ -125,7 +129,7 @@ describe('App', () => {
       .mockReturnValueOnce(firstLoad.promise)
       .mockReturnValueOnce(secondLoad.promise);
 
-    render(<App />);
+    const { container } = render(<App />);
 
     await waitFor(() => {
       expect(testState.listArticles).toHaveBeenCalledWith(expect.anything(), {
@@ -149,13 +153,15 @@ describe('App', () => {
       secondLoad.resolve([userBArticle]);
     });
 
-    expect(await screen.findByText('User B Article')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getByText(container, 'User B Article')).toBeTruthy();
+    });
 
     await act(async () => {
       firstLoad.resolve([userAArticle]);
     });
 
-    expect(screen.queryByText('User A Article')).not.toBeInTheDocument();
-    expect(screen.getByText('User B Article')).toBeInTheDocument();
+    expect(queryByText(container, 'User A Article')).toBeUndefined();
+    expect(getByText(container, 'User B Article')).toBeTruthy();
   });
 });

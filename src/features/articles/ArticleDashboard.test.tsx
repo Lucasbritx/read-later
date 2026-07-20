@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+// @vitest-environment happy-dom
+
 import { describe, expect, it, vi } from 'vitest';
 
+import { click, getButton, getByText, render, waitFor } from '../../test/render';
 import { ArticleDashboard } from './ArticleDashboard';
 import type { Article } from './articleTypes';
 
@@ -30,7 +31,7 @@ const articles: Article[] = [
   }
 ];
 
-const renderDashboard = () => {
+function renderDashboard() {
   const props = {
     articles,
     currentFilter: 'all' as const,
@@ -44,47 +45,44 @@ const renderDashboard = () => {
     userEmail: 'lucas@example.com'
   };
 
-  render(<ArticleDashboard {...props} />);
+  const view = render(<ArticleDashboard {...props} />);
 
-  return props;
-};
+  return { ...props, ...view };
+}
 
 describe('ArticleDashboard', () => {
   it('renders articles and unread count', () => {
-    renderDashboard();
+    const { container } = renderDashboard();
 
-    expect(screen.getByText('First Article')).toBeInTheDocument();
-    expect(screen.getByText('Second Article')).toBeInTheDocument();
-    expect(screen.getByText('1 unread')).toBeInTheDocument();
+    expect(getByText(container, 'First Article')).toBeTruthy();
+    expect(getByText(container, 'Second Article')).toBeTruthy();
+    expect(getByText(container, '1 unread')).toBeTruthy();
   });
 
   it('marks an unread article read', async () => {
-    const user = userEvent.setup();
-    const { onToggleStatus } = renderDashboard();
+    const { container, onToggleStatus } = renderDashboard();
 
-    await user.click(screen.getByRole('button', { name: 'Mark First Article read' }));
+    await click(getButton(container, 'Mark First Article read'));
 
     expect(onToggleStatus).toHaveBeenCalledWith('article-1', 'read');
   });
 
   it('changes the active filter', async () => {
-    const user = userEvent.setup();
-    const { onFilterChange } = renderDashboard();
+    const { container, onFilterChange } = renderDashboard();
 
-    await user.click(screen.getByRole('button', { name: 'Read' }));
+    await click(getButton(container, 'Read'));
 
     expect(onFilterChange).toHaveBeenCalledWith('read');
   });
 
   it('reports failed dashboard actions', async () => {
-    const user = userEvent.setup();
-    const props = renderDashboard();
-    props.onToggleStatus.mockRejectedValueOnce(new Error('Could not update article.'));
+    const { container, onActionError, onToggleStatus } = renderDashboard();
+    onToggleStatus.mockRejectedValueOnce(new Error('Could not update article.'));
 
-    await user.click(screen.getByRole('button', { name: 'Mark First Article read' }));
+    await click(getButton(container, 'Mark First Article read'));
 
     await waitFor(() => {
-      expect(props.onActionError).toHaveBeenCalledWith('Could not update article.');
+      expect(onActionError).toHaveBeenCalledWith('Could not update article.');
     });
   });
 });
