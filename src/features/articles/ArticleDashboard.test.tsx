@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -36,10 +36,11 @@ const renderDashboard = () => {
     currentFilter: 'all' as const,
     isLoading: false,
     onCreate: vi.fn().mockResolvedValue(undefined),
-    onDelete: vi.fn(),
+    onActionError: vi.fn(),
+    onDelete: vi.fn().mockResolvedValue(undefined),
     onFilterChange: vi.fn(),
-    onSignOut: vi.fn(),
-    onToggleStatus: vi.fn(),
+    onSignOut: vi.fn().mockResolvedValue(undefined),
+    onToggleStatus: vi.fn().mockResolvedValue(undefined),
     userEmail: 'lucas@example.com'
   };
 
@@ -73,5 +74,17 @@ describe('ArticleDashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Read' }));
 
     expect(onFilterChange).toHaveBeenCalledWith('read');
+  });
+
+  it('reports failed dashboard actions', async () => {
+    const user = userEvent.setup();
+    const props = renderDashboard();
+    props.onToggleStatus.mockRejectedValueOnce(new Error('Could not update article.'));
+
+    await user.click(screen.getByRole('button', { name: 'Mark First Article read' }));
+
+    await waitFor(() => {
+      expect(props.onActionError).toHaveBeenCalledWith('Could not update article.');
+    });
   });
 });

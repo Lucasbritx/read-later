@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ArticleDashboard, type ArticleFilter } from './features/articles/ArticleDashboard';
 import {
@@ -24,25 +24,37 @@ export default function App() {
   const [isBooting, setIsBooting] = useState(true);
   const [isLoadingArticles, setIsLoadingArticles] = useState(false);
   const [notice, setNotice] = useState('');
+  const refreshRequestId = useRef(0);
 
   const userId = session?.user.id;
 
   const refreshArticles = useCallback(async () => {
     if (!userId) {
+      refreshRequestId.current += 1;
       setArticles([]);
+      setIsLoadingArticles(false);
       return;
     }
 
+    const requestId = refreshRequestId.current + 1;
+    refreshRequestId.current = requestId;
     setIsLoadingArticles(true);
     setNotice('');
 
     try {
       const nextArticles = await listArticles(supabase, { userId, status: filter });
-      setArticles(nextArticles);
+
+      if (refreshRequestId.current === requestId) {
+        setArticles(nextArticles);
+      }
     } catch (error) {
-      setNotice(getErrorMessage(error, 'Could not load articles.'));
+      if (refreshRequestId.current === requestId) {
+        setNotice(getErrorMessage(error, 'Could not load articles.'));
+      }
     } finally {
-      setIsLoadingArticles(false);
+      if (refreshRequestId.current === requestId) {
+        setIsLoadingArticles(false);
+      }
     }
   }, [filter, userId]);
 
@@ -90,6 +102,7 @@ export default function App() {
       throw new Error(error.message);
     }
 
+    refreshRequestId.current += 1;
     setArticles([]);
   };
 
@@ -139,6 +152,7 @@ export default function App() {
         isLoading={isLoadingArticles}
         onCreate={handleCreateArticle}
         onDelete={handleDeleteArticle}
+        onActionError={setNotice}
         onFilterChange={setFilter}
         onSignOut={handleSignOut}
         onToggleStatus={handleToggleStatus}

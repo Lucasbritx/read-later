@@ -11,10 +11,11 @@ type ArticleDashboardProps = {
   currentFilter: ArticleFilter;
   isLoading: boolean;
   onCreate: (draft: ArticleDraft) => Promise<void>;
-  onDelete: (articleId: string) => void;
+  onActionError: (message: string) => void;
+  onDelete: (articleId: string) => Promise<void>;
   onFilterChange: (filter: ArticleFilter) => void;
-  onSignOut: () => void;
-  onToggleStatus: (articleId: string, status: ArticleStatus) => void;
+  onSignOut: () => Promise<void>;
+  onToggleStatus: (articleId: string, status: ArticleStatus) => Promise<void>;
   userEmail: string;
 };
 
@@ -29,6 +30,7 @@ export function ArticleDashboard({
   currentFilter,
   isLoading,
   onCreate,
+  onActionError,
   onDelete,
   onFilterChange,
   onSignOut,
@@ -36,6 +38,14 @@ export function ArticleDashboard({
   userEmail
 }: ArticleDashboardProps) {
   const unreadCount = articles.filter((article) => article.status === 'unread').length;
+
+  async function runDashboardAction(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (error) {
+      onActionError(error instanceof Error ? error.message : 'Action failed.');
+    }
+  }
 
   return (
     <main className="app-shell article-dashboard">
@@ -46,7 +56,11 @@ export function ArticleDashboard({
           <p className="muted">{userEmail}</p>
         </div>
 
-        <button className="secondary-button" type="button" onClick={onSignOut}>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => void runDashboardAction(onSignOut)}
+        >
           <LogOut aria-hidden="true" size={18} />
           Sign out
         </button>
@@ -105,7 +119,9 @@ export function ArticleDashboard({
                       className="icon-button"
                       type="button"
                       aria-label={`Mark ${article.title} ${nextStatus}`}
-                      onClick={() => onToggleStatus(article.id, nextStatus)}
+                      onClick={() =>
+                        void runDashboardAction(() => onToggleStatus(article.id, nextStatus))
+                      }
                     >
                       <ToggleIcon aria-hidden="true" size={18} />
                     </button>
@@ -113,7 +129,7 @@ export function ArticleDashboard({
                       className="icon-button danger"
                       type="button"
                       aria-label={`Delete ${article.title}`}
-                      onClick={() => onDelete(article.id)}
+                      onClick={() => void runDashboardAction(() => onDelete(article.id))}
                     >
                       <Trash2 aria-hidden="true" size={18} />
                     </button>
