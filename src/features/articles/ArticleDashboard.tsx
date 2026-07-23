@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
+
 import Check from 'lucide-react/dist/esm/icons/check.js';
 import LogOut from 'lucide-react/dist/esm/icons/log-out.js';
+import Send from 'lucide-react/dist/esm/icons/send.js';
 import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
 import Undo2 from 'lucide-react/dist/esm/icons/undo-2.js';
 
@@ -13,12 +16,16 @@ type ArticleDashboardProps = {
   articles: Article[];
   currentFilter: ArticleFilter;
   isLoading: boolean;
+  kindleEmail: string;
   onCreate: (draft: ArticleDraft) => Promise<void>;
   onActionError: (message: string) => void;
   onDelete: (articleId: string) => Promise<void>;
   onFilterChange: (filter: ArticleFilter) => void;
+  onSaveKindleEmail: (kindleEmail: string) => Promise<void>;
+  onSendToKindle: (articleId: string) => Promise<void>;
   onSignOut: () => Promise<void>;
   onToggleStatus: (articleId: string, status: ArticleStatus) => Promise<void>;
+  sendingArticleIds: string[];
   userEmail: string;
 };
 
@@ -32,15 +39,24 @@ export function ArticleDashboard({
   articles,
   currentFilter,
   isLoading,
+  kindleEmail,
   onCreate,
   onActionError,
   onDelete,
   onFilterChange,
+  onSaveKindleEmail,
+  onSendToKindle,
   onSignOut,
   onToggleStatus,
+  sendingArticleIds,
   userEmail
 }: ArticleDashboardProps) {
+  const [kindleEmailDraft, setKindleEmailDraft] = useState(kindleEmail);
   const unreadCount = articles.filter((article) => article.status === 'unread').length;
+
+  useEffect(() => {
+    setKindleEmailDraft(kindleEmail);
+  }, [kindleEmail]);
 
   async function runDashboardAction(action: () => Promise<void>) {
     try {
@@ -78,6 +94,36 @@ export function ArticleDashboard({
         <ArticleForm onCreate={onCreate} />
       </section>
 
+      <section className="dashboard-band" aria-labelledby="kindle-delivery-heading">
+        <div>
+          <h2 id="kindle-delivery-heading">Kindle delivery</h2>
+          <p className="muted">Use your Kindle personal document email.</p>
+        </div>
+
+        <form
+          className="kindle-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runDashboardAction(() => onSaveKindleEmail(kindleEmailDraft));
+          }}
+        >
+          <label htmlFor="kindle-email">Kindle email</label>
+          <div className="inline-form-row">
+            <input
+              id="kindle-email"
+              type="email"
+              value={kindleEmailDraft}
+              placeholder="name@kindle.com"
+              required
+              onChange={(event) => setKindleEmailDraft(event.target.value)}
+            />
+            <button className="secondary-button" type="submit">
+              Save Kindle email
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="library-section" aria-labelledby="article-library-heading">
         <div className="library-section-header">
           <h2 id="article-library-heading">Library</h2>
@@ -106,6 +152,7 @@ export function ArticleDashboard({
             {articles.map((article) => {
               const nextStatus: ArticleStatus = article.status === 'unread' ? 'read' : 'unread';
               const ToggleIcon = nextStatus === 'read' ? Check : Undo2;
+              const isSending = sendingArticleIds.includes(article.id);
 
               return (
                 <li className="article-item" key={article.id}>
@@ -118,6 +165,19 @@ export function ArticleDashboard({
                   </div>
 
                   <div className="article-actions">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label={
+                        isSending
+                          ? `Sending ${article.title} to Kindle`
+                          : `Send ${article.title} to Kindle`
+                      }
+                      disabled={isSending}
+                      onClick={() => void runDashboardAction(() => onSendToKindle(article.id))}
+                    >
+                      <Send aria-hidden="true" size={18} />
+                    </button>
                     <button
                       className="icon-button"
                       type="button"

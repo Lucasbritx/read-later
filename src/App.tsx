@@ -10,6 +10,12 @@ import {
 } from './features/articles/articleRepository';
 import type { Article, ArticleStatus } from './features/articles/articleTypes';
 import { AuthForm } from './features/auth/AuthForm';
+import {
+  getKindleSettings,
+  saveKindleSettings,
+  sendArticleToKindle
+} from './features/kindle/kindleRepository';
+import type { KindleSettings } from './features/kindle/kindleTypes';
 import type { ArticleDraft } from './lib/urlMetadata';
 import { supabase } from './lib/supabaseClient';
 
@@ -23,10 +29,18 @@ export default function App() {
   const [filter, setFilter] = useState<ArticleFilter>('unread');
   const [isBooting, setIsBooting] = useState(true);
   const [isLoadingArticles, setIsLoadingArticles] = useState(false);
+  const [kindleSettings, setKindleSettings] = useState<KindleSettings | null>(null);
   const [notice, setNotice] = useState('');
+  const [sendingArticleIds, setSendingArticleIds] = useState<string[]>([]);
   const refreshRequestId = useRef(0);
+  const kindleSaveRequestId = useRef(0);
+  const sessionUserIdRef = useRef<string | undefined>(undefined);
 
   const userId = session?.user.id;
+
+  useEffect(() => {
+    sessionUserIdRef.current = userId;
+  }, [userId]);
 
   const refreshArticles = useCallback(async () => {
     if (!userId) {
@@ -67,6 +81,15 @@ export default function App() {
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user.id;
+      sessionUserIdRef.current = nextUserId;
+      kindleSaveRequestId.current += 1;
+
+      if (!nextUserId) {
+        setKindleSettings(null);
+        setSendingArticleIds([]);
+      }
+
       setSession(nextSession);
     });
 
@@ -78,6 +101,44 @@ export default function App() {
   useEffect(() => {
     void refreshArticles();
   }, [refreshArticles]);
+
+  useEffect(() => {
+    if (!userId) {
+      setKindleSettings(null);
+      setSendingArticleIds([]);
+      kindleSaveRequestId.current += 1;
+      return;
+    }
+
+    const requestUserId = userId;
+    const requestId = kindleSaveRequestId.current + 1;
+    kindleSaveRequestId.current = requestId;
+    let isCurrent = true;
+
+    getKindleSettings(supabase, requestUserId)
+      .then((settings) => {
+        if (
+          isCurrent &&
+          kindleSaveRequestId.current === requestId &&
+          sessionUserIdRef.current === requestUserId
+        ) {
+          setKindleSettings(settings);
+        }
+      })
+      .catch((error) => {
+        if (
+          isCurrent &&
+          kindleSaveRequestId.current === requestId &&
+          sessionUserIdRef.current === requestUserId
+        ) {
+          setNotice(getErrorMessage(error, 'Could not load Kindle settings.'));
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [userId]);
 
   const handleSignIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -96,14 +157,22 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    const currentUserId = userId;
     const { error } = await supabase.auth.signOut();
 
     if (error) {
       throw new Error(error.message);
     }
 
+    if (sessionUserIdRef.current === currentUserId) {
+      sessionUserIdRef.current = undefined;
+    }
+
+    kindleSaveRequestId.current += 1;
     refreshRequestId.current += 1;
     setArticles([]);
+    setKindleSettings(null);
+    setSendingArticleIds([]);
   };
 
   const handleCreateArticle = async (draft: ArticleDraft) => {
@@ -136,6 +205,53 @@ export default function App() {
     await refreshArticles();
   };
 
+  const handleSaveKindleEmail = async (kindleEmail: string) => {
+    if (!userId) {
+      return;
+    }
+
+    const requestUserId = userId;
+    const requestId = kindleSaveRequestId.current + 1;
+    kindleSaveRequestId.current = requestId;
+    setNotice('');
+    const nextSettings = await saveKindleSettings(supabase, { userId: requestUserId, kindleEmail });
+
+    if (kindleSaveRequestId.current === requestId && sessionUserIdRef.current === requestUserId) {
+      setKindleSettings(nextSettings);
+      setNotice('Kindle email saved.');
+    }
+  };
+
+  const handleSendToKindle = async (articleId: string) => {
+    if (!userId) {
+      return;
+    }
+
+    if (!kindleSettings) {
+      setNotice('Save your Kindle email before sending.');
+      return;
+    }
+
+    setNotice('');
+    setSendingArticleIds((current) =>
+      current.includes(articleId) ? current : [...current, articleId]
+    );
+
+    const requestUserId = userId;
+
+    try {
+      await sendArticleToKindle(supabase, articleId);
+
+      if (sessionUserIdRef.current === requestUserId) {
+        setNotice('Sent to Kindle.');
+      }
+    } finally {
+      if (sessionUserIdRef.current === requestUserId) {
+        setSendingArticleIds((current) => current.filter((id) => id !== articleId));
+      }
+    }
+  };
+
   if (isBooting) {
     return <main className="app-shell">Loading...</main>;
   }
@@ -150,12 +266,16 @@ export default function App() {
         articles={articles}
         currentFilter={filter}
         isLoading={isLoadingArticles}
+        kindleEmail={kindleSettings?.kindle_email ?? ''}
         onCreate={handleCreateArticle}
         onDelete={handleDeleteArticle}
         onActionError={setNotice}
         onFilterChange={setFilter}
+        onSaveKindleEmail={handleSaveKindleEmail}
+        onSendToKindle={handleSendToKindle}
         onSignOut={handleSignOut}
         onToggleStatus={handleToggleStatus}
+        sendingArticleIds={sendingArticleIds}
         userEmail={session.user.email ?? 'Signed in'}
       />
       {notice ? (

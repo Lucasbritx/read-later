@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { click, getButton, getByText, render, waitFor } from '../../test/render';
+import { click, getButton, getByText, render, typeInto, waitFor } from '../../test/render';
 import { ArticleDashboard } from './ArticleDashboard';
 import type { Article } from './articleTypes';
 
@@ -31,21 +31,25 @@ const articles: Article[] = [
   }
 ];
 
-function renderDashboard() {
+function renderDashboard(overrides: Partial<Parameters<typeof ArticleDashboard>[0]> = {}) {
   const props = {
     articles,
     currentFilter: 'all' as const,
+    kindleEmail: 'reader@kindle.com',
     isLoading: false,
     onCreate: vi.fn().mockResolvedValue(undefined),
     onActionError: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(undefined),
     onFilterChange: vi.fn(),
+    onSaveKindleEmail: vi.fn().mockResolvedValue(undefined),
+    onSendToKindle: vi.fn().mockResolvedValue(undefined),
     onSignOut: vi.fn().mockResolvedValue(undefined),
     onToggleStatus: vi.fn().mockResolvedValue(undefined),
+    sendingArticleIds: [],
     userEmail: 'lucas@example.com'
   };
 
-  const view = render(<ArticleDashboard {...props} />);
+  const view = render(<ArticleDashboard {...props} {...overrides} />);
 
   return { ...props, ...view };
 }
@@ -73,6 +77,36 @@ describe('ArticleDashboard', () => {
     await click(getButton(container, 'Read'));
 
     expect(onFilterChange).toHaveBeenCalledWith('read');
+  });
+
+  it('saves a Kindle email', async () => {
+    const { container, onSaveKindleEmail } = renderDashboard();
+    const input = container.querySelector<HTMLInputElement>('#kindle-email');
+
+    if (!input) {
+      throw new Error('Could not find Kindle email input.');
+    }
+
+    await typeInto(input, 'new-reader@kindle.com');
+    await click(getButton(container, 'Save Kindle email'));
+
+    expect(onSaveKindleEmail).toHaveBeenCalledWith('new-reader@kindle.com');
+  });
+
+  it('sends an article to Kindle', async () => {
+    const { container, onSendToKindle } = renderDashboard();
+
+    await click(getButton(container, 'Send First Article to Kindle'));
+
+    expect(onSendToKindle).toHaveBeenCalledWith('article-1');
+  });
+
+  it('disables an article Kindle action while sending', () => {
+    const { container } = renderDashboard({ sendingArticleIds: ['article-1'] });
+    const button = getButton(container, 'Sending First Article to Kindle') as HTMLButtonElement;
+
+    expect(button).toBeTruthy();
+    expect(button.disabled).toBe(true);
   });
 
   it('reports failed dashboard actions', async () => {
