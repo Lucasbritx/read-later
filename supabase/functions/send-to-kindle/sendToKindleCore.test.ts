@@ -110,6 +110,29 @@ describe('handleSendToKindleRequest', () => {
     await expect(readJson(response)).resolves.toEqual({ error: 'Save your Kindle email before sending.' });
   });
 
+  it('rejects non-Kindle delivery addresses before sending email', async () => {
+    const deps = createDependencies({
+      getKindleSettings: vi.fn().mockResolvedValue({
+        user_id: 'user-1',
+        kindle_email: 'reader@example.com'
+      })
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(400);
+    await expect(readJson(response)).resolves.toEqual({
+      error: 'Save a valid Kindle email before sending.'
+    });
+    expect(deps.sendEmail).not.toHaveBeenCalled();
+  });
+
   it('sends the expected Resend payload for a valid article', async () => {
     const deps = createDependencies();
 
@@ -209,6 +232,30 @@ describe('handleSendToKindleRequest', () => {
         '',
         'Source: Example'
       ].join('\n')
+    );
+  });
+
+  it('allows free.kindle.com delivery addresses', async () => {
+    const deps = createDependencies({
+      getKindleSettings: vi.fn().mockResolvedValue({
+        user_id: 'user-1',
+        kindle_email: 'reader@free.kindle.com'
+      })
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'reader@free.kindle.com'
+      })
     );
   });
 

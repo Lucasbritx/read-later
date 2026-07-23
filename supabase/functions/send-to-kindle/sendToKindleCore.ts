@@ -107,6 +107,10 @@ function buildAttachmentFilename(title: string) {
   return `${slug || 'article'}.txt`;
 }
 
+function isKindleEmail(value: string) {
+  return /^[^\s@]+@(free\.)?kindle\.com$/i.test(value.trim());
+}
+
 export async function handleSendToKindleRequest(
   request: Request,
   deps: SendToKindleDependencies
@@ -141,6 +145,10 @@ export async function handleSendToKindleRequest(
 
   if (!settings) {
     return jsonResponse({ error: 'Save your Kindle email before sending.' }, 400);
+  }
+
+  if (!isKindleEmail(settings.kindle_email)) {
+    return jsonResponse({ error: 'Save a valid Kindle email before sending.' }, 400);
   }
 
   try {

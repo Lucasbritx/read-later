@@ -5,7 +5,7 @@ create table if not exists public.kindle_settings (
   updated_at timestamptz not null default now(),
   constraint kindle_settings_email_trim_check check (length(trim(kindle_email)) > 0),
   constraint kindle_settings_email_shape_check check (
-    kindle_email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
+    kindle_email ~* '^[^@[:space:]]+@(free\.)?kindle\.com$'
   )
 );
 

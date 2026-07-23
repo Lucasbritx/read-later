@@ -128,6 +128,8 @@ describe('kindleRepository', () => {
 
   it('validateKindleEmail accepts valid email and rejects invalid email', () => {
     expect(validateKindleEmail('reader@kindle.com')).toBe(true);
+    expect(validateKindleEmail('reader@free.kindle.com')).toBe(true);
+    expect(validateKindleEmail('reader@example.com')).toBe(false);
     expect(validateKindleEmail('bad email')).toBe(false);
   });
 });

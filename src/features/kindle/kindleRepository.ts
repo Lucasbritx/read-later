@@ -7,7 +7,7 @@ import type {
 } from './kindleTypes';
 
 export function validateKindleEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  return /^[^\s@]+@(free\.)?kindle\.com$/i.test(value.trim());
 }
 
 export async function getKindleSettings(
