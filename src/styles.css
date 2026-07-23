@@ -180,8 +180,27 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.kindle-form {
+  display: grid;
+  gap: 8px;
+}
+
+.inline-form-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(180px, 1fr) auto;
+}
+
+.inline-form-row input {
+  min-width: 0;
+}
+
 @media (max-width: 680px) {
   .article-form {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-form-row {
     grid-template-columns: 1fr;
   }
 }
@@ -363,6 +382,11 @@ button:disabled {
   background: #ecfdf5;
 }
 
+.icon-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .icon-button.danger {
   color: #b91c1c;
 }
@@ -393,7 +417,7 @@ button:disabled {
 
   .article-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .icon-button {

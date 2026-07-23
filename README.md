@@ -15,6 +15,31 @@ Supabase-backed reading-list dashboard for saving article URLs and tracking read
 4. Set `VITE_SUPABASE_URL` to your Supabase project URL.
 5. Set `VITE_SUPABASE_ANON_KEY` to your Supabase anon key.
 
+## Send to Kindle Setup
+
+The MVP sends a `.txt` attachment containing the article title, source URL, description, and site name through a Supabase Edge Function using Resend.
+
+1. Run `supabase/migrations/20260722000000_create_kindle_settings.sql` in Supabase.
+2. Create a Resend API key.
+3. Verify the sender email or domain in Resend.
+4. Add that sender email to Amazon's Approved Personal Document E-mail List.
+5. Set the Edge Function secrets:
+
+```sh
+supabase secrets set SUPABASE_URL="https://your-project-ref.supabase.co"
+supabase secrets set SUPABASE_ANON_KEY="your-public-anon-key"
+supabase secrets set RESEND_API_KEY="your-resend-api-key"
+supabase secrets set KINDLE_SENDER_EMAIL="Read Later <send@example.com>"
+```
+
+6. Deploy the Edge Function:
+
+```sh
+supabase functions deploy send-to-kindle
+```
+
+This first version sends a plain text attachment. The next Kindle phase will generate a Kindle-friendly HTML attachment from extracted article content.
+
 ## Local Development
 
 ```sh
