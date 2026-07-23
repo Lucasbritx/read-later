@@ -127,16 +127,89 @@ describe('handleSendToKindleRequest', () => {
       from: 'send@example.com',
       to: 'reader@kindle.com',
       subject: 'Article: Useful Article',
-      text: [
-        'Useful Article',
+      text: 'Attached: Useful Article',
+      attachments: [
+        {
+          filename: 'useful-article.txt',
+          content: btoa(
+            [
+              'Useful Article',
+              '',
+              'https://example.com/useful',
+              '',
+              'A useful read.',
+              '',
+              'Source: Example'
+            ].join('\n')
+          )
+        }
+      ]
+    });
+  });
+
+  it('uses a safe fallback attachment filename', async () => {
+    const deps = createDependencies({
+      getArticle: vi.fn().mockResolvedValue({
+        ...validArticle,
+        title: '???'
+      })
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({
+            filename: 'article.txt'
+          })
+        ]
+      })
+    );
+  });
+
+  it('base64 encodes unicode article text for the Kindle attachment', async () => {
+    const deps = createDependencies({
+      getArticle: vi.fn().mockResolvedValue({
+        ...validArticle,
+        title: 'Café Article',
+        description: 'São Paulo notes.'
+      })
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    const payload = deps.sendEmail.mock.calls[0][0];
+    const encoded = payload.attachments[0].content;
+    const decoded = new TextDecoder().decode(
+      Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))
+    );
+
+    expect(response.status).toBe(200);
+    expect(decoded).toBe(
+      [
+        'Café Article',
         '',
         'https://example.com/useful',
         '',
-        'A useful read.',
+        'São Paulo notes.',
         '',
         'Source: Example'
       ].join('\n')
-    });
+    );
   });
 
   it('returns a gateway error when email delivery fails', async () => {

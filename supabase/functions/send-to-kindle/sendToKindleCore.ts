@@ -22,6 +22,10 @@ type EmailPayload = {
   to: string;
   subject: string;
   text: string;
+  attachments: {
+    filename: string;
+    content: string;
+  }[];
 };
 
 export type SendToKindleDependencies = {
@@ -82,6 +86,27 @@ function buildEmailText(article: Article) {
   ].join('\n');
 }
 
+function encodeBase64(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary);
+}
+
+function buildAttachmentFilename(title: string) {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+
+  return `${slug || 'article'}.txt`;
+}
+
 export async function handleSendToKindleRequest(
   request: Request,
   deps: SendToKindleDependencies
@@ -123,7 +148,13 @@ export async function handleSendToKindleRequest(
       from: deps.senderEmail,
       to: settings.kindle_email,
       subject: `Article: ${article.title}`,
-      text: buildEmailText(article)
+      text: `Attached: ${article.title}`,
+      attachments: [
+        {
+          filename: buildAttachmentFilename(article.title),
+          content: encodeBase64(buildEmailText(article))
+        }
+      ]
     });
   } catch {
     return jsonResponse({ error: 'Could not send article to Kindle.' }, 502);
