@@ -1,3 +1,5 @@
+import { buildEpub } from './epubBuilder.ts';
+
 type User = {
   id: string;
   email?: string;
@@ -92,8 +94,8 @@ function buildEmailText(article: Article) {
   ].join('\n');
 }
 
-function encodeBase64(value: string) {
-  const bytes = new TextEncoder().encode(value);
+function encodeBase64(value: string | Uint8Array) {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
   let binary = '';
 
   bytes.forEach((byte) => {
@@ -122,10 +124,18 @@ async function buildKindleAttachment(article: Article, deps: SendToKindleDepende
     const extracted = await deps.extractArticle?.(article);
 
     if (extracted?.html.trim()) {
+      const title = extracted.title.trim() || article.title;
+      const epub = buildEpub({
+        title,
+        sourceUrl: article.url,
+        siteName: article.site_name,
+        html: extracted.html
+      });
+
       return {
-        title: extracted.title.trim() || article.title,
-        filename: buildAttachmentFilename(extracted.title || article.title, 'html'),
-        content: encodeBase64(extracted.html)
+        title,
+        filename: buildAttachmentFilename(title, 'epub'),
+        content: encodeBase64(epub)
       };
     }
   } catch {

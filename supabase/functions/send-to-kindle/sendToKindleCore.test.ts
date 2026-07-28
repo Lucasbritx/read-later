@@ -31,6 +31,40 @@ async function readJson(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+function decodeBase64Bytes(value: string) {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+function parseStoredZipEntries(bytes: Uint8Array) {
+  const entries = new Map<string, string>();
+  const decoder = new TextDecoder();
+  let offset = 0;
+
+  while (offset < bytes.length) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset);
+    const signature = view.getUint32(0, true);
+
+    if (signature !== 0x04034b50) {
+      break;
+    }
+
+    const compressedSize = view.getUint32(18, true);
+    const filenameLength = view.getUint16(26, true);
+    const extraLength = view.getUint16(28, true);
+    const filenameStart = offset + 30;
+    const filenameEnd = filenameStart + filenameLength;
+    const contentStart = filenameEnd + extraLength;
+    const contentEnd = contentStart + compressedSize;
+    const filename = decoder.decode(bytes.slice(filenameStart, filenameEnd));
+    const content = decoder.decode(bytes.slice(contentStart, contentEnd));
+
+    entries.set(filename, content);
+    offset = contentEnd;
+  }
+
+  return entries;
+}
+
 describe('handleSendToKindleRequest', () => {
   it('allows CORS preflight requests', async () => {
     const deps = createDependencies();
@@ -170,14 +204,8 @@ describe('handleSendToKindleRequest', () => {
     });
   });
 
-  it('sends an extracted HTML attachment when readable content is available', async () => {
-    const html = [
-      '<!doctype html>',
-      '<html>',
-      '<head><meta charset="utf-8"><title>Readable Article</title></head>',
-      '<body><main><h1>Readable Article</h1><p>Clean article content.</p></main></body>',
-      '</html>'
-    ].join('');
+  it('sends an extracted EPUB attachment when readable content is available', async () => {
+    const html = '<p>Clean article content.</p>';
     const deps = createDependencies({
       extractArticle: vi.fn().mockResolvedValue({
         title: 'Readable Article',
@@ -195,17 +223,22 @@ describe('handleSendToKindleRequest', () => {
 
     expect(response.status).toBe(200);
     expect(deps.extractArticle).toHaveBeenCalledWith(validArticle);
+    const payload = deps.sendEmail.mock.calls[0][0];
+    const entries = parseStoredZipEntries(decodeBase64Bytes(payload.attachments[0].content));
+
     expect(deps.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         text: 'Attached: Readable Article',
         attachments: [
-          {
-            filename: 'readable-article.html',
-            content: btoa(html)
-          }
+          expect.objectContaining({
+            filename: 'readable-article.epub'
+          })
         ]
       })
     );
+    expect(entries.get('mimetype')).toBe('application/epub+zip');
+    expect(entries.get('OEBPS/content.opf')).toContain('<dc:title>Readable Article</dc:title>');
+    expect(entries.get('OEBPS/article.xhtml')).toContain('<p>Clean article content.</p>');
   });
 
   it('falls back to a text attachment when extraction returns no article', async () => {
