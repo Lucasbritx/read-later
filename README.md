@@ -17,7 +17,7 @@ Supabase-backed reading-list dashboard for saving article URLs and tracking read
 
 ## Send to Kindle Setup
 
-The MVP sends a `.txt` attachment containing the article title, source URL, description, and site name through a Supabase Edge Function using Resend.
+The MVP tries to extract readable article content and sends a Kindle-friendly `.html` attachment through a Supabase Edge Function using Resend. If extraction fails, it falls back to a `.txt` attachment containing the article title, source URL, description, and site name.
 
 1. Run `supabase/migrations/20260722000000_create_kindle_settings.sql` in Supabase.
 2. Create a Resend API key.
@@ -38,7 +38,7 @@ supabase secrets set KINDLE_SENDER_EMAIL="Read Later <send@example.com>"
 supabase functions deploy send-to-kindle
 ```
 
-This first version sends a plain text attachment. The next Kindle phase will generate a Kindle-friendly HTML attachment from extracted article content.
+This version sends a Kindle-friendly HTML attachment when article extraction succeeds, with a plain text attachment fallback.
 
 ## Local Development
 
@@ -68,10 +68,9 @@ npm run build
 - Mark articles read or unread
 - Delete articles
 - Chrome extension for saving the active tab
-- Send saved articles to Kindle as a `.txt` attachment
+- Send saved articles to Kindle as an extracted `.html` attachment with `.txt` fallback
 
 ## Future Phases
 
-- Supabase Edge Function for article extraction
-- Kindle-friendly HTML attachments from extracted article content
+- Better extraction controls and saved extracted content
 - EPUB generation
