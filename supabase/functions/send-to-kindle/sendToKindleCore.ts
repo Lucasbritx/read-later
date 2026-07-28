@@ -28,11 +28,17 @@ type EmailPayload = {
   }[];
 };
 
+type ExtractedArticle = {
+  title: string;
+  html: string;
+};
+
 export type SendToKindleDependencies = {
   getUser: (request: Request) => Promise<User | null>;
   getArticle: (userId: string, articleId: string) => Promise<Article | null>;
   getKindleSettings: (userId: string) => Promise<KindleSettings | null>;
   sendEmail: (payload: EmailPayload) => Promise<void>;
+  extractArticle?: (article: Article) => Promise<ExtractedArticle | null>;
   senderEmail: string;
 };
 
@@ -97,18 +103,40 @@ function encodeBase64(value: string) {
   return btoa(binary);
 }
 
-function buildAttachmentFilename(title: string) {
+function buildAttachmentFilename(title: string, extension = 'txt') {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80);
 
-  return `${slug || 'article'}.txt`;
+  return `${slug || 'article'}.${extension}`;
 }
 
 function isKindleEmail(value: string) {
   return /^[^\s@]+@(free\.)?kindle\.com$/i.test(value.trim());
+}
+
+async function buildKindleAttachment(article: Article, deps: SendToKindleDependencies) {
+  try {
+    const extracted = await deps.extractArticle?.(article);
+
+    if (extracted?.html.trim()) {
+      return {
+        title: extracted.title.trim() || article.title,
+        filename: buildAttachmentFilename(extracted.title || article.title, 'html'),
+        content: encodeBase64(extracted.html)
+      };
+    }
+  } catch {
+    // Keep Kindle delivery usable when a page blocks fetches or cannot be parsed.
+  }
+
+  return {
+    title: article.title,
+    filename: buildAttachmentFilename(article.title),
+    content: encodeBase64(buildEmailText(article))
+  };
 }
 
 export async function handleSendToKindleRequest(
@@ -152,15 +180,17 @@ export async function handleSendToKindleRequest(
   }
 
   try {
+    const attachment = await buildKindleAttachment(article, deps);
+
     await deps.sendEmail({
       from: deps.senderEmail,
       to: settings.kindle_email,
       subject: `Article: ${article.title}`,
-      text: `Attached: ${article.title}`,
+      text: `Attached: ${attachment.title}`,
       attachments: [
         {
-          filename: buildAttachmentFilename(article.title),
-          content: encodeBase64(buildEmailText(article))
+          filename: attachment.filename,
+          content: attachment.content
         }
       ]
     });

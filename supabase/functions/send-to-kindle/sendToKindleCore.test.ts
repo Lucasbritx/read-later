@@ -170,6 +170,94 @@ describe('handleSendToKindleRequest', () => {
     });
   });
 
+  it('sends an extracted HTML attachment when readable content is available', async () => {
+    const html = [
+      '<!doctype html>',
+      '<html>',
+      '<head><meta charset="utf-8"><title>Readable Article</title></head>',
+      '<body><main><h1>Readable Article</h1><p>Clean article content.</p></main></body>',
+      '</html>'
+    ].join('');
+    const deps = createDependencies({
+      extractArticle: vi.fn().mockResolvedValue({
+        title: 'Readable Article',
+        html
+      })
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.extractArticle).toHaveBeenCalledWith(validArticle);
+    expect(deps.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Attached: Readable Article',
+        attachments: [
+          {
+            filename: 'readable-article.html',
+            content: btoa(html)
+          }
+        ]
+      })
+    );
+  });
+
+  it('falls back to a text attachment when extraction returns no article', async () => {
+    const deps = createDependencies({
+      extractArticle: vi.fn().mockResolvedValue(null)
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({
+            filename: 'useful-article.txt'
+          })
+        ]
+      })
+    );
+  });
+
+  it('falls back to a text attachment when extraction fails', async () => {
+    const deps = createDependencies({
+      extractArticle: vi.fn().mockRejectedValue(new Error('Could not parse article'))
+    });
+
+    const response = await handleSendToKindleRequest(
+      new Request('https://fn.test', {
+        method: 'POST',
+        body: JSON.stringify({ articleId: 'article-1' })
+      }),
+      deps
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({
+            filename: 'useful-article.txt'
+          })
+        ]
+      })
+    );
+  });
+
   it('uses a safe fallback attachment filename', async () => {
     const deps = createDependencies({
       getArticle: vi.fn().mockResolvedValue({
