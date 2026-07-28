@@ -68,8 +68,10 @@ npm run build
 - Mark articles read or unread
 - Delete articles
 - Chrome extension for saving the active tab
+- Send saved articles to Kindle as a `.txt` attachment
 
 ## Future Phases
 
 - Supabase Edge Function for article extraction
-- Send-to-Kindle through Kindle email
+- Kindle-friendly HTML attachments from extracted article content
+- EPUB generation
