@@ -36,7 +36,7 @@ function decodeBase64Bytes(value: string) {
 }
 
 function parseStoredZipEntries(bytes: Uint8Array) {
-  const entries = new Map<string, string>();
+  const entries = new Map<string, { bytes: Uint8Array; text: string }>();
   const decoder = new TextDecoder();
   let offset = 0;
 
@@ -56,9 +56,12 @@ function parseStoredZipEntries(bytes: Uint8Array) {
     const contentStart = filenameEnd + extraLength;
     const contentEnd = contentStart + compressedSize;
     const filename = decoder.decode(bytes.slice(filenameStart, filenameEnd));
-    const content = decoder.decode(bytes.slice(contentStart, contentEnd));
+    const content = bytes.slice(contentStart, contentEnd);
 
-    entries.set(filename, content);
+    entries.set(filename, {
+      bytes: content,
+      text: decoder.decode(content)
+    });
     offset = contentEnd;
   }
 
@@ -206,10 +209,18 @@ describe('handleSendToKindleRequest', () => {
 
   it('sends an extracted EPUB attachment when readable content is available', async () => {
     const html = '<p>Clean article content.</p>';
+    const imageBytes = new Uint8Array([1, 2, 3, 4]);
     const deps = createDependencies({
       extractArticle: vi.fn().mockResolvedValue({
         title: 'Readable Article',
-        html
+        html,
+        assets: [
+          {
+            path: 'images/image-1.png',
+            mediaType: 'image/png',
+            content: imageBytes
+          }
+        ]
       })
     });
 
@@ -236,9 +247,13 @@ describe('handleSendToKindleRequest', () => {
         ]
       })
     );
-    expect(entries.get('mimetype')).toBe('application/epub+zip');
-    expect(entries.get('OEBPS/content.opf')).toContain('<dc:title>Readable Article</dc:title>');
-    expect(entries.get('OEBPS/article.xhtml')).toContain('<p>Clean article content.</p>');
+    expect(entries.get('mimetype')?.text).toBe('application/epub+zip');
+    expect(entries.get('OEBPS/content.opf')?.text).toContain('<dc:title>Readable Article</dc:title>');
+    expect(entries.get('OEBPS/content.opf')?.text).toContain(
+      '<item id="image-1" href="images/image-1.png" media-type="image/png"/>'
+    );
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('<p>Clean article content.</p>');
+    expect(entries.get('OEBPS/images/image-1.png')?.bytes).toEqual(imageBytes);
   });
 
   it('falls back to a text attachment when extraction returns no article', async () => {

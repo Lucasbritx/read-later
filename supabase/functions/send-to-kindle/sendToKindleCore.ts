@@ -1,4 +1,4 @@
-import { buildEpub } from './epubBuilder.ts';
+import { buildEpub, type EpubAsset } from './epubBuilder.ts';
 
 type User = {
   id: string;
@@ -33,6 +33,7 @@ type EmailPayload = {
 type ExtractedArticle = {
   title: string;
   html: string;
+  assets?: EpubAsset[];
 };
 
 export type SendToKindleDependencies = {
@@ -129,7 +130,8 @@ async function buildKindleAttachment(article: Article, deps: SendToKindleDepende
         title,
         sourceUrl: article.url,
         siteName: article.site_name,
-        html: extracted.html
+        html: extracted.html,
+        assets: extracted.assets
       });
 
       return {

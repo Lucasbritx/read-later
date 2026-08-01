@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildEpub } from './epubBuilder';
 
 function parseStoredZipEntries(bytes: Uint8Array) {
-  const entries = new Map<string, string>();
+  const entries = new Map<string, { bytes: Uint8Array; text: string }>();
   const decoder = new TextDecoder();
   let offset = 0;
 
@@ -23,9 +23,12 @@ function parseStoredZipEntries(bytes: Uint8Array) {
     const contentStart = filenameEnd + extraLength;
     const contentEnd = contentStart + compressedSize;
     const filename = decoder.decode(bytes.slice(filenameStart, filenameEnd));
-    const content = decoder.decode(bytes.slice(contentStart, contentEnd));
+    const content = bytes.slice(contentStart, contentEnd);
 
-    entries.set(filename, content);
+    entries.set(filename, {
+      bytes: content,
+      text: decoder.decode(content)
+    });
     offset = contentEnd;
   }
 
@@ -42,11 +45,11 @@ describe('buildEpub', () => {
     });
     const entries = parseStoredZipEntries(epub);
 
-    expect(entries.get('mimetype')).toBe('application/epub+zip');
-    expect(entries.get('META-INF/container.xml')).toContain('OEBPS/content.opf');
-    expect(entries.get('OEBPS/content.opf')).toContain('<dc:title>Readable Article</dc:title>');
-    expect(entries.get('OEBPS/nav.xhtml')).toContain('Readable Article');
-    expect(entries.get('OEBPS/article.xhtml')).toContain('<p>Clean article content.</p>');
+    expect(entries.get('mimetype')?.text).toBe('application/epub+zip');
+    expect(entries.get('META-INF/container.xml')?.text).toContain('OEBPS/content.opf');
+    expect(entries.get('OEBPS/content.opf')?.text).toContain('<dc:title>Readable Article</dc:title>');
+    expect(entries.get('OEBPS/nav.xhtml')?.text).toContain('Readable Article');
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('<p>Clean article content.</p>');
   });
 
   it('escapes metadata while preserving article markup', () => {
@@ -58,9 +61,33 @@ describe('buildEpub', () => {
     });
     const entries = parseStoredZipEntries(epub);
 
-    expect(entries.get('OEBPS/content.opf')).toContain('<dc:title>A&amp;B &lt;Story&gt;</dc:title>');
-    expect(entries.get('OEBPS/article.xhtml')).toContain('Example &lt;Site&gt;');
-    expect(entries.get('OEBPS/article.xhtml')).toContain('https://example.com/a?x=1&amp;y=2');
-    expect(entries.get('OEBPS/article.xhtml')).toContain('<p>Body & content.</p>');
+    expect(entries.get('OEBPS/content.opf')?.text).toContain('<dc:title>A&amp;B &lt;Story&gt;</dc:title>');
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('Example &lt;Site&gt;');
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('https://example.com/a?x=1&amp;y=2');
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('<p>Body & content.</p>');
+  });
+
+  it('packages image assets and declares them in the manifest', () => {
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const epub = buildEpub({
+      title: 'Illustrated Article',
+      sourceUrl: 'https://example.com/readable',
+      siteName: 'Example',
+      html: '<p><img src="images/image-1.png" alt="Chart"/></p>',
+      assets: [
+        {
+          path: 'images/image-1.png',
+          mediaType: 'image/png',
+          content: imageBytes
+        }
+      ]
+    });
+    const entries = parseStoredZipEntries(epub);
+
+    expect(entries.get('OEBPS/content.opf')?.text).toContain(
+      '<item id="image-1" href="images/image-1.png" media-type="image/png"/>'
+    );
+    expect(entries.get('OEBPS/article.xhtml')?.text).toContain('src="images/image-1.png"');
+    expect(entries.get('OEBPS/images/image-1.png')?.bytes).toEqual(imageBytes);
   });
 });
