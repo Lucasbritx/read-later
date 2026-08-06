@@ -1,6 +1,12 @@
 type EpubEntry = {
   path: string;
-  content: string;
+  content: string | Uint8Array;
+};
+
+export type EpubAsset = {
+  path: string;
+  mediaType: string;
+  content: Uint8Array;
 };
 
 export type EpubInput = {
@@ -8,6 +14,7 @@ export type EpubInput = {
   sourceUrl: string;
   siteName: string;
   html: string;
+  assets?: EpubAsset[];
 };
 
 const encoder = new TextEncoder();
@@ -131,7 +138,7 @@ function buildZip(entries: EpubEntry[]) {
   let offset = 0;
 
   entries.forEach((entry) => {
-    const contentBytes = encoder.encode(entry.content);
+    const contentBytes = typeof entry.content === 'string' ? encoder.encode(entry.content) : entry.content;
     const checksum = crc32(contentBytes);
     const localFile = buildLocalFileHeader(entry.path, contentBytes, checksum);
 
@@ -158,9 +165,20 @@ function buildContainerXml() {
   ].join('');
 }
 
+function buildManifestAssetItems(assets: EpubAsset[]) {
+  return assets.map((asset, index) => {
+    const id = `image-${index + 1}`;
+    const href = escapeXml(asset.path);
+    const mediaType = escapeXml(asset.mediaType);
+
+    return `<item id="${id}" href="${href}" media-type="${mediaType}"/>`;
+  });
+}
+
 function buildContentOpf(input: EpubInput) {
   const title = escapeXml(input.title);
   const identifier = escapeXml(input.sourceUrl || `read-later:${input.title}`);
+  const assetItems = buildManifestAssetItems(input.assets ?? []);
 
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
@@ -174,6 +192,7 @@ function buildContentOpf(input: EpubInput) {
     '<manifest>',
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     '<item id="article" href="article.xhtml" media-type="application/xhtml+xml"/>',
+    ...assetItems,
     '</manifest>',
     '<spine>',
     '<itemref idref="article"/>',
@@ -239,6 +258,7 @@ function buildArticleXhtml(input: EpubInput) {
 
 export function buildEpub(input: EpubInput) {
   const title = input.title.trim() || 'Article';
+  const assets = input.assets ?? [];
   const entries: EpubEntry[] = [
     {
       path: 'mimetype',
@@ -250,7 +270,7 @@ export function buildEpub(input: EpubInput) {
     },
     {
       path: 'OEBPS/content.opf',
-      content: buildContentOpf({ ...input, title })
+      content: buildContentOpf({ ...input, title, assets })
     },
     {
       path: 'OEBPS/nav.xhtml',
@@ -259,7 +279,11 @@ export function buildEpub(input: EpubInput) {
     {
       path: 'OEBPS/article.xhtml',
       content: buildArticleXhtml({ ...input, title })
-    }
+    },
+    ...assets.map((asset) => ({
+      path: `OEBPS/${asset.path}`,
+      content: asset.content
+    }))
   ];
 
   return buildZip(entries);

@@ -5,27 +5,22 @@ import {
   handleSendToKindleRequest,
   type SendToKindleDependencies
 } from './sendToKindleCore.ts';
+import type { EpubAsset } from './epubBuilder.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const resendApiKey = Deno.env.get('RESEND_API_KEY') ?? '';
 const senderEmail = Deno.env.get('KINDLE_SENDER_EMAIL') ?? '';
 const articleFetchTimeoutMs = 10_000;
+const imageFetchTimeoutMs = 5_000;
+const maxArticleImages = 8;
+const maxTotalImageBytes = 6 * 1024 * 1024;
 
 type ArticleForExtraction = {
   title: string;
   url: string;
   site_name: string;
 };
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 function createAuthorizedClient(authorizationHeader: string | null) {
   return createClient(supabaseUrl, supabaseAnonKey, {
@@ -58,41 +53,163 @@ async function fetchArticleHtml(url: string) {
   }
 }
 
-function buildKindleHtml({
-  title,
-  url,
-  siteName,
-  content
-}: {
-  title: string;
-  url: string;
-  siteName: string;
-  content: string;
-}) {
-  return [
-    '<!doctype html>',
-    '<html>',
-    '<head>',
-    '<meta charset="utf-8">',
-    `<title>${escapeHtml(title)}</title>`,
-    '<style>',
-    'body{font-family:serif;line-height:1.55;margin:0;padding:1.5rem;color:#111;}',
-    'main{max-width:42rem;margin:0 auto;}',
-    'h1{font-size:1.8rem;line-height:1.2;margin:0 0 .5rem;}',
-    '.source{font-size:.9rem;color:#555;margin:0 0 1.5rem;}',
-    'img,video,iframe{max-width:100%;height:auto;}',
-    'pre{white-space:pre-wrap;}',
-    '</style>',
-    '</head>',
-    '<body>',
-    '<main>',
-    `<h1>${escapeHtml(title)}</h1>`,
-    `<p class="source">${escapeHtml(siteName || 'Source')}: <a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>`,
-    content,
-    '</main>',
-    '</body>',
-    '</html>'
-  ].join('');
+function resolveImageUrl(src: string, baseUrl: string) {
+  try {
+    const url = new URL(src, baseUrl);
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function imageMediaTypeFromUrl(url: string) {
+  const pathname = new URL(url).pathname.toLowerCase();
+
+  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  }
+
+  if (pathname.endsWith('.png')) {
+    return 'image/png';
+  }
+
+  if (pathname.endsWith('.gif')) {
+    return 'image/gif';
+  }
+
+  if (pathname.endsWith('.webp')) {
+    return 'image/webp';
+  }
+
+  if (pathname.endsWith('.svg')) {
+    return 'image/svg+xml';
+  }
+
+  return null;
+}
+
+function normalizeImageMediaType(contentType: string | null, url: string) {
+  const mediaType = contentType?.split(';')[0]?.trim().toLowerCase() || imageMediaTypeFromUrl(url);
+
+  if (
+    mediaType === 'image/jpeg' ||
+    mediaType === 'image/png' ||
+    mediaType === 'image/gif' ||
+    mediaType === 'image/webp' ||
+    mediaType === 'image/svg+xml'
+  ) {
+    return mediaType;
+  }
+
+  return null;
+}
+
+function imageExtensionForMediaType(mediaType: string) {
+  if (mediaType === 'image/jpeg') {
+    return 'jpg';
+  }
+
+  if (mediaType === 'image/svg+xml') {
+    return 'svg';
+  }
+
+  return mediaType.replace('image/', '');
+}
+
+function removeImageSourceAttributes(image: Element) {
+  image.removeAttribute('src');
+  image.removeAttribute('srcset');
+  image.removeAttribute('sizes');
+}
+
+async function fetchImageAsset(url: string, index: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), imageFetchTimeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'User-Agent': 'Read Later Kindle Extractor/1.0'
+      },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const mediaType = normalizeImageMediaType(response.headers.get('Content-Type'), url);
+
+    if (!mediaType) {
+      return null;
+    }
+
+    const contentLength = Number(response.headers.get('Content-Length') ?? 0);
+
+    if (contentLength > maxTotalImageBytes) {
+      return null;
+    }
+
+    const content = new Uint8Array(await response.arrayBuffer());
+
+    return {
+      path: `images/image-${index}.${imageExtensionForMediaType(mediaType)}`,
+      mediaType,
+      content
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function prepareArticleAssets(content: string, baseUrl: string): Promise<{ html: string; assets: EpubAsset[] }> {
+  const { document } = parseHTML(`<main>${content}</main>`);
+  const container = document.querySelector('main');
+
+  if (!container) {
+    return { html: content, assets: [] };
+  }
+
+  const assets: EpubAsset[] = [];
+  let totalBytes = 0;
+  let nextAssetIndex = 1;
+
+  for (const image of Array.from(container.querySelectorAll('img')).slice(0, maxArticleImages)) {
+    const src = image.getAttribute('src');
+    const resolvedUrl = src ? resolveImageUrl(src, baseUrl) : null;
+
+    if (!resolvedUrl) {
+      removeImageSourceAttributes(image);
+      continue;
+    }
+
+    const asset = await fetchImageAsset(resolvedUrl, nextAssetIndex);
+
+    if (!asset || totalBytes + asset.content.byteLength > maxTotalImageBytes) {
+      removeImageSourceAttributes(image);
+      continue;
+    }
+
+    assets.push(asset);
+    totalBytes += asset.content.byteLength;
+    nextAssetIndex += 1;
+    image.setAttribute('src', asset.path);
+    image.removeAttribute('srcset');
+    image.removeAttribute('sizes');
+  }
+
+  return {
+    html: container.innerHTML,
+    assets
+  };
 }
 
 async function extractReadableArticle(article: ArticleForExtraction) {
@@ -105,15 +222,12 @@ async function extractReadableArticle(article: ArticleForExtraction) {
   }
 
   const title = parsed.title?.trim() || article.title;
+  const articleWithAssets = await prepareArticleAssets(parsed.content, article.url);
 
   return {
     title,
-    html: buildKindleHtml({
-      title,
-      url: article.url,
-      siteName: article.site_name,
-      content: parsed.content
-    })
+    html: articleWithAssets.html,
+    assets: articleWithAssets.assets
   };
 }
 
